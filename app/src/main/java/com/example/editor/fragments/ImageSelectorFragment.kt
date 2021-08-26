@@ -28,11 +28,11 @@ import android.view.View.OnTouchListener
 import android.widget.ImageView
 
 
-
 class ImageSelectorFragment : Fragment() {
 
     private var bitmap: Bitmap? = null
     private var alteredBitmap: Bitmap? = null
+    private var isGreyscale = false
 
     private lateinit var imageUri: Uri
     override fun onCreateView(
@@ -52,6 +52,25 @@ class ImageSelectorFragment : Fragment() {
                 val permissions = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
                 requestPermissions(permissions, 1001)
             } else pickImage()
+        }
+        greyScaleButton.setOnClickListener {
+            val matrix = ColorMatrix()
+            matrix.setSaturation(
+                if (isGreyscale) {
+                    isGreyscale = false
+                    greyScaleButton.setBackgroundColor(
+                        greyScaleButton.context.resources.getColor(R.color.drawColor)
+                    )
+                    1f
+                } else {
+                    isGreyscale = true
+                    greyScaleButton.setBackgroundColor(
+                        greyScaleButton.context.resources.getColor(R.color.drawColorGrayscale)
+                    )
+                    0f
+                }
+            )
+            chosenImageView.colorFilter = ColorMatrixColorFilter(matrix)
         }
     }
     override fun onRequestPermissionsResult(
@@ -109,24 +128,31 @@ class ImageSelectorFragment : Fragment() {
         }
     }
     private fun onImageSelected(){
-        //bitmap = MediaStore.Images.Media.getBitmap((activity as MainActivity).contentResolver, imageUri)
-
+        (activity as MainActivity).supportActionBar?.setDisplayHomeAsUpEnabled(true)
         selectImageText.visibility = View.GONE
         selectImageButton.visibility = View.GONE
         saveButton.visibility = View.VISIBLE
         chosenImageView.visibility = View.VISIBLE
-        addTextButton.visibility = View.VISIBLE
         greyScaleButton.visibility = View.VISIBLE
     }
 }
 class DrawableImageView : androidx.appcompat.widget.AppCompatImageView, OnTouchListener {
-    private var downx = 0f
-    private var downy = 0f
-    private var upx = 0f
-    private var upy = 0f
+    private var currentX = 0f
+    private var currentY = 0f
+    private var motionEventX = 0f
+    private var motionEventY = 0f
     private var canvas: Canvas? = null
-    private var paint: Paint? = null
     private var matrixMe: Matrix? = null
+
+    private val paint = Paint().apply {
+        color = resources.getColor(R.color.drawColor, resources.newTheme())
+        isAntiAlias = true
+        isDither = true
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 12f
+    }
 
     constructor(context: Context?) : super(context!!) {
         setOnTouchListener(this)
@@ -143,9 +169,6 @@ class DrawableImageView : androidx.appcompat.widget.AppCompatImageView, OnTouchL
 
     fun setNewImage(alteredBitmap: Bitmap?, bmp: Bitmap?) {
         canvas = Canvas(alteredBitmap!!)
-        paint = Paint()
-        paint!!.color = resources.getColor(R.color.drawColor, resources.newTheme())
-        paint!!.strokeWidth = 10f
         matrixMe = Matrix()
         canvas!!.drawBitmap(bmp!!, matrixMe!!, paint)
         setImageBitmap(alteredBitmap)
@@ -154,27 +177,26 @@ class DrawableImageView : androidx.appcompat.widget.AppCompatImageView, OnTouchL
     override fun onTouch(v: View?, event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
-                downx = event.x //event.getX();
-                downy = event.y //event.getY();
+                currentX = getPointerCoords(event)[0]
+                currentY = getPointerCoords(event)[1]
             }
             MotionEvent.ACTION_MOVE -> {
-                upx = event.x //event.getX();
-                upy = event.y //event.getY();
-                canvas!!.drawLine(downx, downy, upx, upy, paint!!)
+                motionEventX = getPointerCoords(event)[0]
+                motionEventY = getPointerCoords(event)[1]
+                canvas!!.drawLine(currentX, currentY, motionEventX, motionEventY, paint)
                 invalidate()
-                downx = upx
-                downy = upy
+                currentX = motionEventX
+                currentY = motionEventY
             }
             MotionEvent.ACTION_UP -> {
-                upx = event.x //event.getX();
-                upy = event.y //event.getY();
-                //canvas!!.drawLine(downx, downy, upx, upy, paint!!)
+                motionEventX = getPointerCoords(event)[0]
+                motionEventY = getPointerCoords(event)[1]
+                //canvas!!.drawLine(currentX, currentY, motionEventX, motionEventY, paint)
                 invalidate()
             }
         }
         return true
     }
-
     fun getPointerCoords(e: MotionEvent): FloatArray {
         val index = e.actionIndex
         val coords = floatArrayOf(e.getX(index), e.getY(index))
@@ -185,71 +207,3 @@ class DrawableImageView : androidx.appcompat.widget.AppCompatImageView, OnTouchL
         return coords
     }
 }
-//private const val STROKE_WIDTH = 12f
-//class DrawCanvas (context: Context, attrs: AttributeSet): View(context, attrs) {
-//    private lateinit var extraCanvas: Canvas
-//    private var extraBitmap: Bitmap = bitmap
-//    private val drawColour= ResourcesCompat.getColor(resources, R.color.drawColor, null)
-//    private var path = Path()
-//    private var motionTouchEventX = 0f
-//    private var motionTouchEventY = 0f
-//    private var currentX = 0f
-//    private var currentY = 0f
-//    private val touchTolerance = ViewConfiguration.get(context).scaledTouchSlop
-//
-//    private val paint = Paint().apply {
-//        color = drawColour
-//        isAntiAlias = true
-//        isDither = true
-//        style = Paint.Style.STROKE
-//        strokeJoin = Paint.Join.ROUND
-//        strokeCap = Paint.Cap.ROUND
-//        strokeWidth = STROKE_WIDTH
-//    }
-//
-//    override fun onTouchEvent(event: MotionEvent): Boolean {
-//        motionTouchEventX = event.x
-//        motionTouchEventY = event.y
-//        when(event.action){
-//            MotionEvent.ACTION_DOWN -> touchStart()
-//            MotionEvent.ACTION_MOVE -> touchMove()
-//            MotionEvent.ACTION_UP -> touchUp()
-//        }
-//        return true
-//    }
-//
-//    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-//        super.onSizeChanged(w, h, oldw, oldh)
-//
-//        //if(extraBitmap==null)
-//            extraBitmap = Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888)
-//        extraCanvas = extraBitmap.let { Canvas(it) }
-//    }
-//
-//    override fun onDraw(canvas: Canvas){
-//        super.onDraw(canvas)
-//
-//        extraBitmap.let { canvas.drawBitmap(it, 0f, 0f, null) }
-//    }
-//
-//    private fun touchStart() {
-//        path.reset()
-//        path.moveTo(motionTouchEventX, motionTouchEventY)
-//        currentX = motionTouchEventX
-//        currentY = motionTouchEventY
-//    }
-//
-//    private fun touchMove() {
-//        val dx = abs(motionTouchEventX - currentX)
-//        val dy = abs(motionTouchEventY - currentY)
-//        if(dx>=touchTolerance || dy>=touchTolerance){
-//            path.quadTo(currentX, currentY, (currentX+motionTouchEventX)/2, (currentY+motionTouchEventY)/2)
-//            currentX = motionTouchEventX
-//            currentY = motionTouchEventY
-//
-//            extraCanvas.drawPath(path, paint)
-//        }
-//        invalidate()
-//    }
-//    private fun touchUp() {path.reset()}
-//}

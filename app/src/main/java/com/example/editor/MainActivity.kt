@@ -1,15 +1,13 @@
 package com.example.editor
 
-import android.graphics.Bitmap
-import android.net.Uri
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.MenuItem
+import android.view.View
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.FragmentTransaction
 import com.example.editor.fragments.ImageSelectorFragment
 import kotlinx.android.synthetic.main.activity_main.*
-import androidx.annotation.NonNull
+import kotlinx.android.synthetic.main.fragment_image_selector.*
 
 
 class MainActivity : AppCompatActivity(){
@@ -21,9 +19,9 @@ class MainActivity : AppCompatActivity(){
         setContentView(R.layout.activity_main)
         setSupportActionBar(toolbar)
 
-        swapFragments(imageSelectorFragment)
+        setFragment(imageSelectorFragment)
     }
-    fun swapFragments(fragment: Fragment){
+    private fun setFragment(fragment: Fragment){
         val transaction = supportFragmentManager.beginTransaction()
         transaction.replace(R.id.fragmentContainer, fragment)
         transaction.commit()
@@ -31,20 +29,14 @@ class MainActivity : AppCompatActivity(){
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             android.R.id.home -> {
-                swapFragments(ImageSelectorFragment())
+                selectImageText.visibility = View.VISIBLE
+                selectImageButton.visibility = View.VISIBLE
+                saveButton.visibility = View.GONE
+                chosenImageView.visibility = View.GONE
+                greyScaleButton.visibility = View.GONE
                 supportActionBar?.setDisplayHomeAsUpEnabled(false)
             }
         }
         return super.onOptionsItemSelected(item)
     }
-
-//    override fun passBitmap(bitmap: Bitmap) {
-//        val bundle = Bundle()
-//        bundle.putParcelable("bitmap", bitmap)
-//
-//        val frag2 = EditImageFragment()
-//        frag2.arguments = bundle
-//
-//        swapFragments(frag2)
-//    }
 }
