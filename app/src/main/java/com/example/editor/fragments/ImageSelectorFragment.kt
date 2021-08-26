@@ -42,6 +42,7 @@ import android.graphics.ColorMatrix
 
 import android.graphics.Bitmap
 import android.renderscript.*
+import android.util.DisplayMetrics
 
 class ImageSelectorFragment : Fragment() {
 
@@ -71,7 +72,55 @@ class ImageSelectorFragment : Fragment() {
         saveButton.setOnClickListener {
             val bitmapDrawableImageView = chosenImageView.drawable
             bitmapSave = bitmapDrawableImageView.toBitmap()
-            saveImage(bitmapSave!!)
+            val outputStream: OutputStream?
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    val contentResolver: ContentResolver =
+                        (activity as MainActivity).contentResolver
+                    val contentValues = ContentValues()
+                    contentValues.put(
+                        MediaStore.MediaColumns.DISPLAY_NAME,
+                        "Image_${System.currentTimeMillis()}.jpg"
+                    )
+                    contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                    contentValues.put(
+                        MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES
+                                + File.separator
+                                + "Photo_Editor"
+                    )
+                    val imageUri = contentResolver.insert(
+                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                        contentValues
+                    )
+                    outputStream =
+                        Objects.requireNonNull(imageUri)
+                            .let { contentResolver.openOutputStream(it!!) }
+                    bitmapSave?.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
+                    Objects.requireNonNull(outputStream)
+
+
+                    Toast.makeText(activity as MainActivity, "Image Saved", Toast.LENGTH_SHORT)
+                        .show()
+                } catch (e: Exception) {
+                    Toast.makeText(
+                        activity as MainActivity,
+                        "Image not saved: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }else{
+                if (activity?.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_DENIED) {
+                    val permissions1 = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                    requestPermissions(permissions1, 1001)
+                }
+                else if (activity?.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    == PackageManager.PERMISSION_DENIED) {
+                    val permissions2 = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    requestPermissions(permissions2, 1002)
+                }
+                else saveImage(bitmapSave!!)
+            }
         }
         greyScaleButton.setOnClickListener {
             val bitmapDrawableImageView = chosenImageView.drawable
@@ -108,67 +157,43 @@ class ImageSelectorFragment : Fragment() {
     }
     private fun saveImage(bitmap: Bitmap){
         var outputStream: OutputStream? = null
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)  {
-            try{
-                val contentResolver: ContentResolver = (activity as MainActivity).contentResolver
-                val contentValues = ContentValues()
-                contentValues.put(
-                    MediaStore.MediaColumns.DISPLAY_NAME,
-                    "Image_${System.currentTimeMillis()}.jpg"
-                )
-                contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                contentValues.put(
-                    MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES
-                            + File.separator
-                            + "Photo_Editor"
-                )
-                val imageUri = contentResolver.insert(
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    contentValues
-                )
-                outputStream =
-                    Objects.requireNonNull(imageUri).let { contentResolver.openOutputStream(it!!) }
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
-                Objects.requireNonNull(outputStream)
+        val file = Environment.getExternalStorageDirectory()
+            val dir = File(file.absolutePath + "/Editor/")
+            dir.mkdir()
 
+            val fileName = String.format("Image_${System.currentTimeMillis()}.png")
+            val outFile = File(dir, fileName)
 
-                Toast.makeText(activity as MainActivity, "Image Saved", Toast.LENGTH_SHORT).show()
-            }
-            catch(e: Exception) {
+            try {
+                outputStream = FileOutputStream(outFile)
+            } catch (e: Exception) {
                 Toast.makeText(
                     activity as MainActivity,
                     "Image not saved: ${e.message}",
                     Toast.LENGTH_SHORT
                 ).show()
             }
-        }
-        else{
-            val file = Environment.getExternalStorageDirectory()
-            val dir = File(file.absolutePath + "/Editor")
-            dir.mkdir()
-
-            val fileName = String.format("${System.currentTimeMillis()}.png")
-            val outFile = File(dir, fileName)
-
-
-            try {
-                outputStream = FileOutputStream(outFile)
-            } catch (e: Exception) {
-                Log.v("ERROR", e.toString())
-            }
-            bitmap?.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+        Log.d("ImageFragment","the path is: ${outFile.absolutePath}")
+        Toast.makeText(activity as MainActivity, "Image Saved", Toast.LENGTH_SHORT).show()
             try {
                 outputStream?.flush()
             } catch (e: Exception) {
-                Log.v("ERROR", e.toString())
+                Toast.makeText(
+                    activity as MainActivity,
+                    "Image not saved: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
             try {
                 outputStream?.close()
             } catch (e: Exception) {
-                Log.v("ERROR", e.toString())
+                Toast.makeText(
+                    activity as MainActivity,
+                    "Image not saved: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
-        }
     }
     private fun pickImage(){
         val intent = Intent(Intent.ACTION_PICK)
@@ -198,14 +223,6 @@ class ImageSelectorFragment : Fragment() {
 
             try {
                 val bmpFactoryOptions = BitmapFactory.Options()
-//                bmpFactoryOptions.inJustDecodeBounds = true
-//                bitmap = BitmapFactory
-//                    .decodeStream(
-//                        activity
-//                            ?.contentResolver?.openInputStream(
-//                                imageUri
-//                            ), null, bmpFactoryOptions
-//                    )
                 bmpFactoryOptions.inJustDecodeBounds = false
                 bitmap = BitmapFactory
                     .decodeStream(
@@ -229,11 +246,6 @@ class ImageSelectorFragment : Fragment() {
         saveButton.visibility = View.VISIBLE
         chosenImageView.visibility = View.VISIBLE
         greyScaleButton.visibility = View.VISIBLE
-    }
-    fun onEnd(){
-        bitmapSave!!.recycle()
-        bitmap!!.recycle()
-        alteredBitmap!!.recycle()
     }
 }
 class DrawableImageView : androidx.appcompat.widget.AppCompatImageView, OnTouchListener {
@@ -297,7 +309,7 @@ class DrawableImageView : androidx.appcompat.widget.AppCompatImageView, OnTouchL
         }
         return true
     }
-    fun getPointerCoords(e: MotionEvent): FloatArray {
+    private fun getPointerCoords(e: MotionEvent): FloatArray {
         val index = e.actionIndex
         val coords = floatArrayOf(e.getX(index), e.getY(index))
         val matrix = Matrix()
