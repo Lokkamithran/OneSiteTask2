@@ -2,12 +2,16 @@ package com.example.editor.fragments
 
 import android.Manifest
 import android.app.Activity
+import android.content.ContentResolver
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.AttributeSet
 import android.util.Log
@@ -26,13 +30,24 @@ import android.view.MotionEvent
 
 import android.view.View.OnTouchListener
 import android.widget.ImageView
+import androidx.core.app.ActivityCompat
+import androidx.core.graphics.drawable.toBitmap
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
+import java.util.*
+import android.graphics.ColorMatrixColorFilter
 
+import android.graphics.ColorMatrix
+
+import android.graphics.Bitmap
+import android.renderscript.*
 
 class ImageSelectorFragment : Fragment() {
 
     private var bitmap: Bitmap? = null
     private var alteredBitmap: Bitmap? = null
-    private var isGreyscale = false
+    private var bitmapSave: Bitmap? = null
 
     private lateinit var imageUri: Uri
     override fun onCreateView(
@@ -49,28 +64,24 @@ class ImageSelectorFragment : Fragment() {
         selectImageButton.setOnClickListener{
             if (activity?.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
                 == PackageManager.PERMISSION_DENIED) {
-                val permissions = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-                requestPermissions(permissions, 1001)
+                val permissions1 = arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                requestPermissions(permissions1, 1001)
             } else pickImage()
         }
+        saveButton.setOnClickListener {
+            val bitmapDrawableImageView = chosenImageView.drawable
+            bitmapSave = bitmapDrawableImageView.toBitmap()
+            saveImage(bitmapSave!!)
+        }
         greyScaleButton.setOnClickListener {
-            val matrix = ColorMatrix()
-            matrix.setSaturation(
-                if (isGreyscale) {
-                    isGreyscale = false
-                    greyScaleButton.setBackgroundColor(
-                        greyScaleButton.context.resources.getColor(R.color.drawColor)
-                    )
-                    1f
-                } else {
-                    isGreyscale = true
-                    greyScaleButton.setBackgroundColor(
-                        greyScaleButton.context.resources.getColor(R.color.drawColorGrayscale)
-                    )
-                    0f
-                }
+            val bitmapDrawableImageView = chosenImageView.drawable
+            bitmapSave = bitmapDrawableImageView.toBitmap()
+            bitmapSave = toGrayscale(bitmapSave!!)
+            alteredBitmap = Bitmap.createBitmap(bitmapSave!!.width, bitmapSave!!.height, bitmapSave!!.config)
+            chosenImageView.setNewImage(alteredBitmap, bitmapSave)
+            greyScaleButton.setBackgroundColor(
+                greyScaleButton.context.resources.getColor(R.color.drawColorGrayscale)
             )
-            chosenImageView.colorFilter = ColorMatrixColorFilter(matrix)
         }
     }
     override fun onRequestPermissionsResult(
@@ -85,7 +96,77 @@ class ImageSelectorFragment : Fragment() {
                 if(grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
                     pickImage()
                 else
-                    Toast.makeText(activity,"Permission Denied", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(activity,"Permission1 Denied", Toast.LENGTH_SHORT).show()
+            }
+            1002 -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED)
+                    saveImage(bitmapSave!!)
+                else
+                    Toast.makeText(activity, "Permission2 Denied", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    private fun saveImage(bitmap: Bitmap){
+        var outputStream: OutputStream? = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)  {
+            try{
+                val contentResolver: ContentResolver = (activity as MainActivity).contentResolver
+                val contentValues = ContentValues()
+                contentValues.put(
+                    MediaStore.MediaColumns.DISPLAY_NAME,
+                    "Image_${System.currentTimeMillis()}.jpg"
+                )
+                contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                contentValues.put(
+                    MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES
+                            + File.separator
+                            + "Photo_Editor"
+                )
+                val imageUri = contentResolver.insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    contentValues
+                )
+                outputStream =
+                    Objects.requireNonNull(imageUri).let { contentResolver.openOutputStream(it!!) }
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
+                Objects.requireNonNull(outputStream)
+
+
+                Toast.makeText(activity as MainActivity, "Image Saved", Toast.LENGTH_SHORT).show()
+            }
+            catch(e: Exception) {
+                Toast.makeText(
+                    activity as MainActivity,
+                    "Image not saved: ${e.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+        else{
+            val file = Environment.getExternalStorageDirectory()
+            val dir = File(file.absolutePath + "/Editor")
+            dir.mkdir()
+
+            val fileName = String.format("${System.currentTimeMillis()}.png")
+            val outFile = File(dir, fileName)
+
+
+            try {
+                outputStream = FileOutputStream(outFile)
+            } catch (e: Exception) {
+                Log.v("ERROR", e.toString())
+            }
+            bitmap?.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+
+            try {
+                outputStream?.flush()
+            } catch (e: Exception) {
+                Log.v("ERROR", e.toString())
+            }
+            try {
+                outputStream?.close()
+            } catch (e: Exception) {
+                Log.v("ERROR", e.toString())
             }
         }
     }
@@ -93,6 +174,20 @@ class ImageSelectorFragment : Fragment() {
         val intent = Intent(Intent.ACTION_PICK)
         intent.type = "image/*"
         startActivityForResult(intent,1)
+    }
+    private fun toGrayscale(bmpOriginal: Bitmap): Bitmap? {
+        val height: Int = bmpOriginal.height
+        val width: Int = bmpOriginal.width
+        val bmpGrayscale = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmpGrayscale)
+        val paint = Paint()
+        val cm = ColorMatrix()
+        cm.setSaturation(0f)
+        val f = ColorMatrixColorFilter(cm)
+        paint.colorFilter = f
+        val matrix = Matrix()
+        c.drawBitmap(bmpOriginal, matrix, paint)
+        return bmpGrayscale
     }
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -134,6 +229,11 @@ class ImageSelectorFragment : Fragment() {
         saveButton.visibility = View.VISIBLE
         chosenImageView.visibility = View.VISIBLE
         greyScaleButton.visibility = View.VISIBLE
+    }
+    fun onEnd(){
+        bitmapSave!!.recycle()
+        bitmap!!.recycle()
+        alteredBitmap!!.recycle()
     }
 }
 class DrawableImageView : androidx.appcompat.widget.AppCompatImageView, OnTouchListener {

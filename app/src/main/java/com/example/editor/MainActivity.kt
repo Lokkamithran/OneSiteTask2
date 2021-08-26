@@ -34,7 +34,11 @@ class MainActivity : AppCompatActivity(){
                 saveButton.visibility = View.GONE
                 chosenImageView.visibility = View.GONE
                 greyScaleButton.visibility = View.GONE
+                greyScaleButton.setBackgroundColor(
+                    greyScaleButton.context.resources.getColor(R.color.drawColor)
+                    )
                 supportActionBar?.setDisplayHomeAsUpEnabled(false)
+                ImageSelectorFragment().onEnd()
             }
         }
         return super.onOptionsItemSelected(item)
